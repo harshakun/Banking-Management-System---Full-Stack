@@ -1,4 +1,5 @@
 -- Creating the Database
+
 CREATE DATABASE BANK_MANAGEMENT_SYSTEM;
 GO
 
