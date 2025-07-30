@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Customer Portal</title>
+    <style>body{font-family:sans-serif;margin:2em}.container{max-width:600px;margin:auto;padding:1em;border:1px solid #ccc;border-radius:5px;margin-bottom:2em}h2{border-bottom:2px solid #0056b3}form{display:flex;flex-direction:column;gap:10px}input,select,button{padding:8px;font-size:1rem}button{background-color:#007bff;color:white;border:none;cursor:pointer}#results{margin-top:1em;padding:1em;background-color:#f0f0f0}table{width:100%;border-collapse:collapse;margin-top:1em}th,td{border:1px solid #ddd;padding:8px}</style>
+</head>
+<body>
+    <div class="container">
+        <h2>Open New Account</h2>
+        <form id="openAccountForm"><input type="text" name="accountType" value="SAVINGS" readonly><input type="text" name="holderName" placeholder="Full Name" required><input type="date" name="dob" required><input type="text" name="aadhar" placeholder="Aadhar Number" required><input type="text" name="mobile" placeholder="Mobile Number" required><input type="number" name="balance" placeholder="Opening Balance (min 1000)" required><input type="text" name="address" placeholder="Address" required><button type="submit">Submit Application</button></form>
+    </div>
+    <div class="container">
+        <h2>Make a Transaction</h2>
+        <form id="transactionForm"><input type="number" name="accountNumber" placeholder="Account Number" required><select name="paymentType"><option value="CREDIT">Credit (Deposit)</option><option value="DEBIT">Debit (Withdrawal)</option></select><input type="number" name="amount" placeholder="Amount" required><button type="submit">Submit Transaction</button></form>
+    </div>
+    <div class="container">
+        <h2>View Payment Statement</h2>
+        <form id="statementForm"><input type="number" name="accountNumber" placeholder="Account Number" required><input type="number" name="months" placeholder="Months of history" required><button type="submit">Get Statement</button></form>
+        <div id="statementResult"></div>
+    </div>
+    <div id="results">Status messages will appear here...</div>
+    <script>
+        const API_URL='http://localhost:3000',resultsDiv=document.getElementById("results");document.getElementById("openAccountForm").addEventListener("submit",async e=>{e.preventDefault();const t=new FormData(e.target),n=Object.fromEntries(t.entries()),a=await fetch(`${API_URL}/api/open-account`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(n)}),s=await a.json();resultsDiv.innerText=s.message}),document.getElementById("transactionForm").addEventListener("submit",async e=>{e.preventDefault();const t=new FormData(e.target),n=Object.fromEntries(t.entries()),a=await fetch(`${API_URL}/api/make-transaction`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(n)}),s=await a.json();resultsDiv.innerText=s.message}),document.getElementById("statementForm").addEventListener("submit",async e=>{e.preventDefault();const t=e.target.accountNumber.value,n=e.target.months.value,a=document.getElementById("statementResult"),s=await fetch(`${API_URL}/api/payment-statement/${t}/${n}`),o=await s.json();if(o.length>0){let e="<table><tr><th>ID</th><th>Type</th><th>Amount</th><th>Date</th></tr>";o.forEach(t=>{e+=`<tr><td>${t.Transaction_ID}</td><td>${t.Payment_Type}</td><td>${t.Transaction_Amount}</td><td>${new Date(t.Date_of_Transaction).toLocaleString()}</td></tr>`}),e+="</table>",a.innerHTML=e}else a.innerText="No transactions found."});
+    </script>
+</body>
+</html>

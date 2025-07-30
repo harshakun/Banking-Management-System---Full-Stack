@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Bank Admin Portal</title>
+    <style>body{font-family:sans-serif;background-color:#f4f4f4}.container{max-width:800px;margin:2em auto;padding:1em;background-color:white;box-shadow:0 0 10px rgba(0,0,0,.1)}h2{border-bottom:2px solid #28a745}table{width:100%;border-collapse:collapse;margin-top:1em}th,td{border:1px solid #ddd;padding:8px}.approve-btn{background-color:#28a745;color:white;border:none;padding:5px 10px;cursor:pointer}</style>
+</head>
+<body>
+    <div class="container">
+        <h2>Pending KYC Approvals</h2>
+        <div id="pendingAccounts">Loading...</div>
+        <div id="status" style="margin-top:1em;font-weight:bold;"></div>
+    </div>
+    <script>
+        const API_URL='http://localhost:3000',pendingDiv=document.getElementById("pendingAccounts"),statusDiv=document.getElementById("status");async function fetchPendingAccounts(){const e=await fetch(`${API_URL}/api/pending-accounts`),t=await e.json();if(t.length>0){let e="<table><tr><th>App. ID</th><th>Name</th><th>Aadhar</th><th>Action</th></tr>";t.forEach(t=>{e+=`<tr><td>${t.ID}</td><td>${t.Account_Holder_Name}</td><td>${t.Aadhar_Number}</td><td><button class="approve-btn" onclick="approveAccount(${t.ID})">Approve</button></td></tr>`}),e+="</table>",pendingDiv.innerHTML=e}else pendingDiv.innerText="No pending applications found."}async function approveAccount(e){statusDiv.innerText="Approving...";const t=await fetch(`${API_URL}/api/approve-account/${e}`,{method:"POST"}),n=await t.json();statusDiv.innerText=n.message,fetchPendingAccounts()}fetchPendingAccounts();
+    </script>
+</body>
+</html>
