@@ -24,6 +24,8 @@
             padding-bottom: 10px; 
             color: #0056b3;
         }
+        .account-details p { margin: 0.5em 0; font-size: 1.1rem; }
+        .account-details span { font-weight: 600; color: #343a40; }
         form { display: flex; flex-direction: column; gap: 10px; }
         input, select, button { padding: 12px; font-size: 1rem; border-radius: 5px; border: 1px solid #ccc; }
         button { background-color: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
@@ -34,6 +36,17 @@
     </style>
 </head>
 <body>
+
+    <div class="container">
+        <h2>Account Summary</h2>
+        <div class="account-details">
+            <p><strong>Welcome,</strong> <span id="holderName">Loading...</span></p>
+            <p><strong>Account Number:</strong> <span id="accountNumber">Loading...</span></p>
+            <p><strong>Account Type:</strong> <span id="accountType">Loading...</span></p>
+            <p><strong>Current Balance:</strong> ₹<span id="currentBalance">Loading...</span></p>
+            <button id="logoutBtn" style="background-color: #6c757d; margin-top: 10px;">Logout</button>
+        </div>
+    </div>
 
     <div class="container">
         <h2>Make a Transaction</h2>
@@ -55,6 +68,7 @@
         </form>
         <div id="statementResult"></div>
     </div>
+    
     <div class="container" style="border-color: #dc3545;">
         <h2 style="color: #dc3545; border-color: #dc3545;">Danger Zone</h2>
         <p>Deleting your account is permanent and cannot be undone.</p>
@@ -83,6 +97,31 @@
             return false;
         }
 
+        async function fetchAccountDetails() {
+            try {
+                const response = await fetch(`${API_URL}/api/account-details`, { headers: authHeader });
+                if (handleAuthError(response)) return;
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('holderName').innerText = data.Account_Holder_Name;
+                    document.getElementById('accountNumber').innerText = data.Account_Number;
+                    document.getElementById('accountType').innerText = data.Account_Type;
+                    document.getElementById('currentBalance').innerText = data.Current_Balance.toFixed(2);
+                } else {
+                     Swal.fire({ icon: 'error', title: 'Error', text: data.message });
+                }
+            } catch(error) {
+                Swal.fire({ icon: 'error', title: 'Oops...', text: 'Could not fetch account details.' });
+            }
+        }
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('authToken');
+            window.location.href = '/public/login.html';
+        });
+
         document.getElementById('transactionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
@@ -94,14 +133,12 @@
                     headers: authHeader,
                     body: JSON.stringify(data)
                 });
-
                 if (handleAuthError(response)) return;
-
                 const result = await response.json();
-
                 if (response.ok) {
                     Swal.fire({ icon: 'success', title: 'Transaction Complete!', text: result.message });
                     e.target.reset();
+                    fetchAccountDetails(); // Refresh balance after transaction
                 } else {
                     Swal.fire({ icon: 'error', title: 'Transaction Failed', text: result.message });
                 }
@@ -112,22 +149,17 @@
 
         document.getElementById('statementForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            // CORRECTED: Only get the 'months' value from the form
             const months = e.target.months.value;
             const statementDiv = document.getElementById('statementResult');
             statementDiv.innerHTML = 'Loading...';
 
             try {
-                // CORRECTED: The URL no longer needs the account number
                 const response = await fetch(`${API_URL}/api/payment-statement/${months}`, {
                     method: 'GET',
                     headers: authHeader
                 });
-
                 if (handleAuthError(response)) return;
-
                 const transactions = await response.json();
-
                 if (response.ok) {
                     if (transactions.length > 0) {
                         let table = `<table><tr><th>ID</th><th>Type</th><th>Amount</th><th>Date</th></tr>`;
@@ -153,7 +185,8 @@
                 statementDiv.innerText = '';
             }
         });
-                document.getElementById('deleteAccountBtn').addEventListener('click', async () => {
+        
+        document.getElementById('deleteAccountBtn').addEventListener('click', async () => {
             const result = await Swal.fire({
                 title: 'Are you sure?',
                 text: "This action cannot be undone!",
@@ -163,20 +196,17 @@
                 cancelButtonColor: '#6c757d',
                 confirmButtonText: 'Yes, delete it!'
             });
-
             if (result.isConfirmed) {
                 try {
                     const response = await fetch(`${API_URL}/api/account`, {
                         method: 'DELETE',
                         headers: authHeader
                     });
-                    
                     const resData = await response.json();
-
                     if (response.ok) {
                         await Swal.fire('Deleted!', resData.message, 'success');
-                        localStorage.removeItem('authToken'); // Log the user out
-                        window.location.href = '/public/login.html'; // Redirect
+                        localStorage.removeItem('authToken');
+                        window.location.href = '/public/login.html';
                     } else {
                         Swal.fire('Error', resData.message, 'error');
                     }
@@ -186,6 +216,7 @@
             }
         });
 
+        document.addEventListener('DOMContentLoaded', fetchAccountDetails);
     </script>
 </body>
 </html>
