@@ -13,30 +13,34 @@
         input { padding: 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
         button { padding: 12px; font-size: 1rem; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
         button:hover { background-color: #0056b3; }
+        .register-link { text-align: center; margin-top: 1.5em; }
     </style>
 </head>
 <body>
     <div class="login-container">
         <h2>Customer Login</h2>
         <form id="loginForm">
-            <input type="number" name="accountNumber" placeholder="Account Number" required>
+            <input type="text" name="loginId" placeholder="Account or Aadhar Number" required>
             <input type="password" name="password" placeholder="Password" required>
             <button type="submit">Login</button>
         </form>
+        <div class="register-link">
+             <p>No account? <a href="/public/register.html">Create one here</a></p>
+        </div>
     </div>
 
     <script>
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
+            // Updated data object to send 'loginId'
             const data = {
-                accountNumber: formData.get('accountNumber'),
+                loginId: formData.get('loginId'),
                 password: formData.get('password')
             };
 
             try {
                 const response = await fetch('http://localhost:3001/api/login', {
-
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
@@ -45,9 +49,21 @@
                 const result = await response.json();
 
                 if (response.ok) {
-                    // If login is successful, save the token and redirect
                     localStorage.setItem('authToken', result.token);
-                    window.location.href = '/public/customer.html'; // Redirect to the customer portal
+                    window.location.href = '/public/customer.html';
+                } else if (response.status === 404) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Account Not Found',
+                        text: result.message,
+                        showCancelButton: true,
+                        confirmButtonText: 'Create Account',
+                        confirmButtonColor: '#28a745'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = '/public/register.html';
+                        }
+                    })
                 } else {
                     Swal.fire({
                         icon: 'error',

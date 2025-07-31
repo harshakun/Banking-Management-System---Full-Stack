@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register New Account</title>
+    <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; background-color: #f8f9fa; margin: 2em; }
+        .container { max-width: 600px; margin: auto; padding: 2em; background: white; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 8px; }
+        h2 { text-align: center; color: #0056b3; margin-bottom: 1.5em; }
+        form { display: flex; flex-direction: column; gap: 1em; }
+        input, button { padding: 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #28a745; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #218838; }
+        .login-link { text-align: center; margin-top: 1.5em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Open New Bank Account</h2>
+        <form id="registerForm">
+            <input type="text" name="holderName" placeholder="Full Name" required>
+            <input type="date" name="dob" placeholder="Date of Birth" required>
+            <input type="text" name="aadhar" placeholder="Aadhar Number" required>
+            <input type="text" name="mobile" placeholder="Mobile Number" required>
+            <input type="text" name="address" placeholder="Full Address" required>
+            <input type="number" name="balance" placeholder="Opening Balance (min 1000)" required>
+            <input type="password" name="password" placeholder="Create Password" required>
+            <input type="password" name="confirmPassword" placeholder="Confirm Password" required>
+            <input type="hidden" name="accountType" value="SAVINGS">
+            <button type="submit">Create Account</button>
+        </form>
+        <div class="login-link">
+            <p>Already have an account? <a href="/public/login.html">Login here</a></p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+
+            if (data.password !== data.confirmPassword) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Passwords do not match!',
+                    text: 'Please re-enter your password.',
+                });
+                return;
+            }
+
+            try {
+                // CORRECTED: Using the full URL to the backend server on port 3001
+                const response = await fetch('http://localhost:3001/api/open-account', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Application Submitted!',
+                        text: 'Your request has been submitted. You can log in with your Aadhar number and password once your account has been approved by the bank.',
+                        confirmButtonText: 'OK'
+                    });
+                    window.location.href = '/public/login.html';
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Registration Failed',
+                        text: result.message
+                    });
+                }
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Oops...',
+                    text: 'Could not connect to the server.'
+                });
+            }
+        });
+    </script>
+</body>
+</html>

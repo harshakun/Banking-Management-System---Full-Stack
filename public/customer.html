@@ -1,68 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Customer Portal</title>
-    <style>body{font-family:sans-serif;margin:2em}.container{max-width:600px;margin:auto;padding:1em;border:1px solid #ccc;border-radius:5px;margin-bottom:2em}h2{border-bottom:2px solid #0056b3}form{display:flex;flex-direction:column;gap:10px}input,select,button{padding:8px;font-size:1rem}button{background-color:#007bff;color:white;border:none;cursor:pointer}#results{margin-top:1em;padding:1em;background-color:#f0f0f0}table{width:100%;border-collapse:collapse;margin-top:1em}th,td{border:1px solid #ddd;padding:8px}</style>
-    <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>   
+    <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body { 
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; 
+            margin: 2em; 
+            background-color: #f8f9fa;
+        }
+        .container { 
+            max-width: 600px; 
+            margin: 2em auto; 
+            padding: 1.5em; 
+            background-color: white; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        h2 { 
+            border-bottom: 2px solid #0056b3; 
+            padding-bottom: 10px; 
+            color: #0056b3;
+        }
+        form { display: flex; flex-direction: column; gap: 10px; }
+        input, select, button { padding: 12px; font-size: 1rem; border-radius: 5px; border: 1px solid #ccc; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #0056b3; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1.5em; }
+        th, td { border: 1px solid #dee2e6; padding: 12px; text-align: left; }
+        th { background-color: #e9ecef; }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Open New Account</h2>
-        <form id="openAccountForm"><input type="text" name="accountType" value="SAVINGS" readonly><input type="text" name="holderName" placeholder="Full Name" required><input type="date" name="dob" required><input type="text" name="aadhar" placeholder="Aadhar Number" required><input type="text" name="mobile" placeholder="Mobile Number" required><input type="number" name="balance" placeholder="Opening Balance (min 1000)" required><input type="text" name="address" placeholder="Address" required><button type="submit">Submit Application</button></form>
-    </div>
+
     <div class="container">
         <h2>Make a Transaction</h2>
-        <form id="transactionForm"><input type="number" name="accountNumber" placeholder="Account Number" required><select name="paymentType"><option value="CREDIT">Credit (Deposit)</option><option value="DEBIT">Debit (Withdrawal)</option></select><input type="number" name="amount" placeholder="Amount" required><button type="submit">Submit Transaction</button></form>
+        <form id="transactionForm">
+            <select name="paymentType">
+                <option value="CREDIT">Credit (Deposit)</option>
+                <option value="DEBIT">Debit (Withdrawal)</option>
+            </select>
+            <input type="number" step="0.01" name="amount" placeholder="Amount" required>
+            <button type="submit">Submit Transaction</button>
+        </form>
     </div>
+
     <div class="container">
         <h2>View Payment Statement</h2>
-        <form id="statementForm"><input type="number" name="accountNumber" placeholder="Account Number" required><input type="number" name="months" placeholder="Months of history" required><button type="submit">Get Statement</button></form>
+        <form id="statementForm">
+            <input type="number" name="months" placeholder="Months of history (e.g., 3)" required>
+            <button type="submit">Get Statement</button>
+        </form>
         <div id="statementResult"></div>
     </div>
-    <div id="results">Status messages will appear here...</div>
-<script>
+
+    <script>
         const API_URL = 'http://localhost:3001';
-        // We no longer need the old resultsDiv
         
-        // Handle Open Account Form
-        document.getElementById('openAccountForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData.entries());
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            window.location.href = '/public/login.html';
+        }
 
-            try {
-                const response = await fetch(`${API_URL}/api/open-account`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
+        const authHeader = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        };
 
-                const result = await response.json();
-
-                if (response.ok) { // Check if the request was successful (status 200-299)
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Success!',
-                        text: result.message,
-                    });
-                    e.target.reset(); // Clear the form after success
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Submission Failed',
-                        text: result.message,
-                    });
-                }
-            } catch (error) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Oops...',
-                    text: 'Could not connect to the server. Please try again later.',
-                });
+        function handleAuthError(response) {
+            if (response.status === 401 || response.status === 403) {
+                localStorage.removeItem('authToken');
+                window.location.href = '/public/login.html';
+                return true;
             }
-        });
+            return false;
+        }
 
-        // Handle Transaction Form
         document.getElementById('transactionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
@@ -71,64 +86,66 @@
             try {
                 const response = await fetch(`${API_URL}/api/make-transaction`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: authHeader,
                     body: JSON.stringify(data)
                 });
+
+                if (handleAuthError(response)) return;
 
                 const result = await response.json();
 
                 if (response.ok) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Transaction Complete!',
-                        text: result.message,
-                    });
-                    e.target.reset(); // Clear the form after success
+                    Swal.fire({ icon: 'success', title: 'Transaction Complete!', text: result.message });
+                    e.target.reset();
                 } else {
-                    // This will now show the "Insufficient funds" error
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Transaction Failed',
-                        text: 'Insufficient funds', 
-                    });
+                    Swal.fire({ icon: 'error', title: 'Transaction Failed', text: result.message });
                 }
             } catch (error) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Oops...',
-                    text: 'Could not connect to the server. Please try again later.',
-                });
+                Swal.fire({ icon: 'error', title: 'Oops...', text: 'Could not connect to the server.' });
             }
         });
 
-        // Handle Statement Form (This one doesn't need a popup, it just displays data)
         document.getElementById('statementForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const accountNumber = e.target.accountNumber.value;
+            // CORRECTED: Only get the 'months' value from the form
             const months = e.target.months.value;
             const statementDiv = document.getElementById('statementResult');
+            statementDiv.innerHTML = 'Loading...';
 
             try {
-                const response = await fetch(`${API_URL}/api/payment-statement/${accountNumber}/${months}`);
+                // CORRECTED: The URL no longer needs the account number
+                const response = await fetch(`${API_URL}/api/payment-statement/${months}`, {
+                    method: 'GET',
+                    headers: authHeader
+                });
+
+                if (handleAuthError(response)) return;
+
                 const transactions = await response.json();
 
-                if (transactions.length > 0) {
-                    let table = `<table><tr><th>ID</th><th>Type</th><th>Amount</th><th>Date</th></tr>`;
-                    transactions.forEach(t => {
-                        table += `<tr>
-                            <td>${t.Transaction_ID}</td>
-                            <td>${t.Payment_Type}</td>
-                            <td>${t.Transaction_Amount.toFixed(2)}</td>
-                            <td>${new Date(t.Date_of_Transaction).toLocaleString()}</td>
-                        </tr>`;
-                    });
-                    table += `</table>`;
-                    statementDiv.innerHTML = table;
+                if (response.ok) {
+                    if (transactions.length > 0) {
+                        let table = `<table><tr><th>ID</th><th>Type</th><th>Amount</th><th>Date</th></tr>`;
+                        transactions.forEach(t => {
+                            table += `<tr>
+                                <td>${t.Transaction_ID}</td>
+                                <td>${t.Payment_Type}</td>
+                                <td>${t.Transaction_Amount.toFixed(2)}</td>
+                                <td>${new Date(t.Date_of_Transaction).toLocaleString()}</td>
+                            </tr>`;
+                        });
+                        table += `</table>`;
+                        statementDiv.innerHTML = table;
+                    } else {
+                        statementDiv.innerText = 'No transactions found for this period.';
+                    }
                 } else {
-                    statementDiv.innerText = 'No transactions found for this period.';
+                     Swal.fire({ icon: 'error', title: 'Failed to Fetch', text: transactions.message });
+                     statementDiv.innerText = '';
                 }
             } catch(error) {
-                statementDiv.innerText = 'Could not fetch statement. Please check the account number.';
+                Swal.fire({ icon: 'error', title: 'Oops...', text: 'Could not fetch statement.' });
+                statementDiv.innerText = '';
             }
         });
     </script>
