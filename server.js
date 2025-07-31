@@ -5,6 +5,11 @@ const cors = require('cors');
 const app = express();
 app.use(express.json());
 app.use(cors());
+
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const aadhar_Number = '';
+
 // app.use((req, res, next) => {
 //   res.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1:5500');
 //   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
@@ -126,5 +131,43 @@ app.get('/api/approved-accounts', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Failed to fetch approved accounts.' });
+    }
+});
+
+
+// == NEW LOGIN ENDPOINT ==
+app.post('/api/login', async (req, res) => {
+    const { accountNumber, password } = req.body;
+
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('AccountNumber', sql.BigInt, accountNumber)
+            .query('SELECT * FROM Account_Holder_Details WHERE Account_Number = @AccountNumber');
+
+        const user = result.recordset[0];
+
+        // 1. Check if user exists
+        if (!user) {
+            return res.status(404).json({ message: 'Account not found.' });
+        }
+
+        // 2. Check if password matches (plain text for now)
+        if (password !== user.Password) {
+            return res.status(401).json({ message: 'Invalid password.' });
+        }
+        
+        // 3. If login is successful, create a secure token (JWT)
+        const token = jwt.sign(
+            { accountNumber: user.Account_Number, name: user.Account_Holder_Name },
+            'your_jwt_secret_key', // Replace with a real, secret key
+            { expiresIn: '1h' } // Token expires in 1 hour
+        );
+            
+        res.status(200).json({ message: 'Login successful!', token: token });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error during login.' });
     }
 });
