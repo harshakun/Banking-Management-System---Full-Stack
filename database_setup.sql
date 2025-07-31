@@ -92,31 +92,47 @@ END;
 GO
 
 -- Trigger for Updating Account Balance after Transactions
-CREATE TRIGGER TR_Update_Current_Balance
+-- This command will update your existing trigger
+ALTER TRIGGER TR_Update_Current_Balance
 ON Transaction_Details
 AFTER INSERT
 AS
 BEGIN
     DECLARE @PaymentType VARCHAR(20), @Amount DECIMAL(10,2), @AccountNumber BIGINT;
     
-    SELECT @PaymentType = Payment_Type, @Amount = Transaction_Amount, @AccountNumber = Account_Number
+    SELECT 
+        @PaymentType = Payment_Type, 
+        @Amount = Transaction_Amount, 
+        @AccountNumber = Account_Number
     FROM inserted;
     
+    -- If it's a deposit, update the balance normally
     IF @PaymentType = 'CREDIT'
     BEGIN
         UPDATE Bank
         SET Current_Balance = Current_Balance + @Amount
         WHERE Account_Number = @AccountNumber;
     END
+    -- If it's a withdrawal, check funds first
     ELSE IF @PaymentType = 'DEBIT'
     BEGIN
-        UPDATE Bank
-        SET Current_Balance = Current_Balance - @Amount
-        WHERE Account_Number = @AccountNumber;
+        -- Check if the current balance is sufficient
+        IF (SELECT Current_Balance FROM Bank WHERE Account_Number = @AccountNumber) >= @Amount
+        BEGIN
+            -- If funds are sufficient, proceed with the withdrawal
+            UPDATE Bank
+            SET Current_Balance = Current_Balance - @Amount
+            WHERE Account_Number = @AccountNumber;
+        END
+        ELSE
+        BEGIN
+            -- If funds are insufficient, block the transaction and raise an error
+            RAISERROR ('Insufficient funds. Transaction cancelled.', 16, 1);
+            ROLLBACK TRANSACTION;
+        END
     END
 END;
 GO
-
 -- Stored Procedure to Open an Account
 CREATE PROCEDURE Open_Account
     @Account_Type VARCHAR(20), @Account_Holder_Name VARCHAR(50), @DOB DATE,

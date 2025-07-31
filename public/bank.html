@@ -1,17 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bank Admin Portal</title>
-    <style>body{font-family:sans-serif;background-color:#f4f4f4}.container{max-width:800px;margin:2em auto;padding:1em;background-color:white;box-shadow:0 0 10px rgba(0,0,0,.1)}h2{border-bottom:2px solid #28a745}table{width:100%;border-collapse:collapse;margin-top:1em}th,td{border:1px solid #ddd;padding:8px}.approve-btn{background-color:#28a745;color:white;border:none;padding:5px 10px;cursor:pointer}</style>
+    <style>
+        body { 
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; 
+            margin: 2em; 
+            background-color: #f8f9fa; 
+            color: #343a40;
+        }
+        .container { 
+            max-width: 900px; 
+            margin: 2em auto; 
+            padding: 1.5em; 
+            background-color: white; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+        }
+        h2 { 
+            border-bottom: 2px solid #007bff; 
+            padding-bottom: 10px; 
+            color: #0056b3;
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 1.5em; 
+        }
+        th, td { 
+            border: 1px solid #dee2e6; 
+            padding: 12px; 
+            text-align: left; 
+            vertical-align: middle;
+        }
+        th { 
+            background-color: #e9ecef; 
+            font-weight: 600;
+        }
+        .approve-btn { 
+            background-color: #28a745; 
+            color: white; 
+            border: none; 
+            padding: 8px 12px; 
+            cursor: pointer; 
+            border-radius: 5px;
+            font-weight: 500;
+        }
+        .approve-btn:hover { 
+            background-color: #218838; 
+        }
+        #status { 
+            margin-top: 1em; 
+            font-weight: bold; 
+            padding: 10px;
+            background-color: #e2e3e5;
+            border-radius: 5px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
+
     <div class="container">
         <h2>Pending KYC Approvals</h2>
         <div id="pendingAccounts">Loading...</div>
-        <div id="status" style="margin-top:1em;font-weight:bold;"></div>
+        <div id="status"></div>
     </div>
+
+    <div class="container">
+        <h2>All Approved Bank Accounts</h2>
+        <div id="approvedAccounts">Loading...</div>
+    </div>
+
     <script>
-        const API_URL='http://localhost:3000',pendingDiv=document.getElementById("pendingAccounts"),statusDiv=document.getElementById("status");async function fetchPendingAccounts(){const e=await fetch(`${API_URL}/api/pending-accounts`),t=await e.json();if(t.length>0){let e="<table><tr><th>App. ID</th><th>Name</th><th>Aadhar</th><th>Action</th></tr>";t.forEach(t=>{e+=`<tr><td>${t.ID}</td><td>${t.Account_Holder_Name}</td><td>${t.Aadhar_Number}</td><td><button class="approve-btn" onclick="approveAccount(${t.ID})">Approve</button></td></tr>`}),e+="</table>",pendingDiv.innerHTML=e}else pendingDiv.innerText="No pending applications found."}async function approveAccount(e){statusDiv.innerText="Approving...";const t=await fetch(`${API_URL}/api/approve-account/${e}`,{method:"POST"}),n=await t.json();statusDiv.innerText=n.message,fetchPendingAccounts()}fetchPendingAccounts();
+        const API_URL = 'http://localhost:3001';
+        const pendingDiv = document.getElementById('pendingAccounts');
+        const approvedDiv = document.getElementById('approvedAccounts');
+        const statusDiv = document.getElementById('status');
+
+        // Fetch pending applications for KYC approval
+        async function fetchPendingAccounts() {
+            try {
+                const response = await fetch(`${API_URL}/api/pending-accounts`);
+                const accounts = await response.json();
+                
+                if (accounts.length > 0) {
+                    let table = `<table><tr><th>App. ID</th><th>Name</th><th>Aadhar</th><th>Action</th></tr>`;
+                    accounts.forEach(acc => {
+                        table += `<tr>
+                            <td>${acc.ID}</td>
+                            <td>${acc.Account_Holder_Name}</td>
+                            <td>${acc.Aadhar_Number}</td>
+                            <td><button class="approve-btn" onclick="approveAccount(${acc.ID})">Approve</button></td>
+                        </tr>`;
+                    });
+                    table += `</table>`;
+                    pendingDiv.innerHTML = table;
+                } else {
+                    pendingDiv.innerText = 'No pending applications found.';
+                }
+            } catch (error) {
+                pendingDiv.innerText = 'Error loading pending accounts.';
+            }
+        }
+
+        // Approve a pending application
+        async function approveAccount(id) {
+            statusDiv.innerText = 'Approving...';
+            try {
+                const response = await fetch(`${API_URL}/api/approve-account/${id}`, { method: 'POST' });
+                const result = await response.json();
+                statusDiv.innerText = result.message;
+                fetchPendingAccounts(); // Refresh pending list
+                fetchApprovedAccounts(); // Refresh approved list
+            } catch (error) {
+                statusDiv.innerText = 'Failed to approve account.';
+            }
+        }
+
+        // Fetch all approved bank accounts
+        async function fetchApprovedAccounts() {
+            try {
+                const response = await fetch(`${API_URL}/api/approved-accounts`);
+                const accounts = await response.json();
+                
+                if (accounts.length > 0) {
+                    let table = `<table>
+                        <tr>
+                            <th>Account Number</th>
+                            <th>Holder Name</th>
+                            <th>Account Type</th>
+                            <th>Current Balance</th>
+                            <th>Date Opened</th>
+                        </tr>`;
+                    accounts.forEach(acc => {
+                        table += `<tr>
+                            <td>${acc.Account_Number}</td>
+                            <td>${acc.Account_Holder_Name}</td>
+                            <td>${acc.Account_Type}</td>
+                            <td>${acc.Current_Balance.toFixed(2)}</td>
+                            <td>${new Date(acc.Account_Opening_Date).toLocaleDateString()}</td>
+                        </tr>`;
+                    });
+                    table += `</table>`;
+                    approvedDiv.innerHTML = table;
+                } else {
+                    approvedDiv.innerText = 'No approved accounts found.';
+                }
+            } catch(error) {
+                approvedDiv.innerText = 'Error loading approved accounts.';
+            }
+        }
+
+        // Initial page load
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchPendingAccounts();
+            fetchApprovedAccounts();
+        });
     </script>
 </body>
 </html>

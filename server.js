@@ -5,6 +5,12 @@ const cors = require('cors');
 const app = express();
 app.use(express.json());
 app.use(cors());
+// app.use((req, res, next) => {
+//   res.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1:5500');
+//   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+//   res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
+//   next();
+// });
 
 // --- ⚠️ UPDATE THIS SECTION ---
 const dbConfig = {
@@ -38,7 +44,9 @@ app.post('/api/open-account', async (req, res) => {
             .input('Address', sql.VarChar, address)
             .execute('Open_Account');
         res.status(201).json({ message: 'Account application submitted successfully!' });
-    } catch (err) { res.status(500).json({ message: 'Server error.' }); }
+    } catch (err) { 
+        console.error(err); // <-- ADD THIS LINE to see the detailed error
+        res.status(500).json({ message: 'Server error.' }); }
 });
 
 // Endpoint to Make a Transaction
@@ -52,7 +60,9 @@ app.post('/api/make-transaction', async (req, res) => {
             .input('Transaction_Amount', sql.Decimal(10, 2), amount)
             .execute('Make_Transaction');
         res.status(200).json({ message: 'Transaction successful!' });
-    } catch (err) { res.status(500).json({ message: 'Server error.' }); }
+    } catch (err) { 
+        console.error(err); 
+        res.status(500).json({ message: 'Server error.' }); }
 });
 
 // Endpoint to Get Account Details
@@ -94,5 +104,27 @@ app.post('/api/approve-account/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ message: 'Failed to approve account.' }); }
 });
 
-const PORT = 3000;
+const PORT = 3001;
 app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));
+
+// Endpoint to Get All Approved Bank Accounts
+app.get('/api/approved-accounts', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request().query(`
+            SELECT 
+                b.Account_Number, 
+                ah.Account_Holder_Name, 
+                b.Account_Type, 
+                b.Current_Balance, 
+                b.Account_Opening_Date 
+            FROM Bank b
+            JOIN Account_Holder_Details ah ON b.Account_Number = ah.Account_Number
+            ORDER BY b.Account_Opening_Date DESC
+        `);
+        res.status(200).json(result.recordset);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to fetch approved accounts.' });
+    }
+});

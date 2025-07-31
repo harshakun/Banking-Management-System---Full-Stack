@@ -1,0 +1,26 @@
+{
+  "name": "banking-management-system---full-stack",
+  "version": "1.0.0",
+  "description": "A comprehensive Bank Management System project built with a Node.js backend and a SQL Server database. This application features separate web portals for customers to manage their accounts and for bank staff to handle administrative tasks like KYC approval.",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harshakun/Banking-Management-System---Full-Stack.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/harshakun/Banking-Management-System---Full-Stack/issues"
+  },
+  "homepage": "https://github.com/harshakun/Banking-Management-System---Full-Stack#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "mssql": "^11.0.1"
+  }
+}
