@@ -171,6 +171,39 @@ app.get('/api/payment-statement/:months', authenticateToken, async (req, res) =>
         res.status(500).json({ message: 'Failed to fetch statement.' });
     }
 });
+// --- Add these two endpoints to server.js ---
+
+// SECURE CUSTOMER ROUTE: A user can delete their own account
+app.delete('/api/account', authenticateToken, async (req, res) => {
+    try {
+        const accountNumber = req.user.accountNumber; // Get account number from the secure token
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('AccountNumber', sql.BigInt, accountNumber)
+            .execute('Delete_Account');
+        
+        res.status(200).json({ message: 'Your account has been successfully deleted.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to delete account.' });
+    }
+});
+
+// ADMIN ROUTE: An admin can delete any account
+app.delete('/api/admin/account/:accountNumber', async (req, res) => {
+    try {
+        const { accountNumber } = req.params; // Get account number from the URL
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('AccountNumber', sql.BigInt, accountNumber)
+            .execute('Delete_Account');
+
+        res.status(200).json({ message: `Account ${accountNumber} has been successfully deleted.` });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to delete account.' });
+    }
+});
 
 
 // ---------------------------------

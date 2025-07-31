@@ -44,8 +44,7 @@
             background-color: #e9ecef; 
             font-weight: 600;
         }
-        .approve-btn { 
-            background-color: #28a745; 
+        .action-btn {
             color: white; 
             border: none; 
             padding: 8px 12px; 
@@ -53,8 +52,17 @@
             border-radius: 5px;
             font-weight: 500;
         }
+        .approve-btn { 
+            background-color: #28a745; 
+        }
         .approve-btn:hover { 
             background-color: #218838; 
+        }
+        .delete-btn {
+             background-color: #dc3545;
+        }
+        .delete-btn:hover {
+            background-color: #c82333;
         }
         #status { 
             margin-top: 1em; 
@@ -99,7 +107,6 @@
         const approvedDiv = document.getElementById('approvedAccounts');
         const statusDiv = document.getElementById('status');
 
-        // Fetch pending applications for KYC approval
         async function fetchPendingAccounts() {
             try {
                 const response = await fetch(`${API_URL}/api/pending-accounts`);
@@ -112,7 +119,7 @@
                             <td>${acc.ID}</td>
                             <td>${acc.Account_Holder_Name}</td>
                             <td>${acc.Aadhar_Number}</td>
-                            <td><button class="approve-btn" onclick="approveAccount(${acc.ID})">Approve</button></td>
+                            <td><button class="action-btn approve-btn" onclick="approveAccount(${acc.ID})">Approve</button></td>
                         </tr>`;
                     });
                     table += `</table>`;
@@ -125,13 +132,11 @@
             }
         }
 
-        // Approve a pending application
         async function approveAccount(id) {
             statusDiv.innerText = 'Approving...';
             try {
                 const response = await fetch(`${API_URL}/api/approve-account/${id}`, { method: 'POST' });
                 const result = await response.json();
-                // This message now contains the new account number from the server
                 statusDiv.innerText = result.message; 
                 fetchPendingAccounts();
                 fetchApprovedAccounts();
@@ -140,21 +145,19 @@
             }
         }
 
-        // Fetch all approved bank accounts
         async function fetchApprovedAccounts() {
             try {
                 const response = await fetch(`${API_URL}/api/approved-accounts`);
                 const accounts = await response.json();
                 
                 if (accounts.length > 0) {
-                    let table = `<table><tr><th>Acc No.</th><th>Name</th><th>Type</th><th>Balance</th><th>Opened On</th></tr>`;
+                    let table = `<table><tr><th>Acc No.</th><th>Name</th><th>Balance</th><th>Actions</th></tr>`;
                     accounts.forEach(acc => {
                         table += `<tr>
                             <td>${acc.Account_Number}</td>
                             <td>${acc.Account_Holder_Name}</td>
-                            <td>${acc.Account_Type}</td>
                             <td>${acc.Current_Balance.toFixed(2)}</td>
-                            <td>${new Date(acc.Account_Opening_Date).toLocaleDateString()}</td>
+                            <td><button class="action-btn delete-btn" onclick="deleteAdminAccount(${acc.Account_Number})">Delete</button></td>
                         </tr>`;
                     });
                     table += `</table>`;
@@ -167,7 +170,35 @@
             }
         }
 
-        // Handle Admin Transaction Form
+        async function deleteAdminAccount(accountNumber) {
+            const result = await Swal.fire({
+                title: `Delete Account ${accountNumber}?`,
+                text: "This is permanent and cannot be undone!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                confirmButtonText: 'Yes, delete it!'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const response = await fetch(`${API_URL}/api/admin/account/${accountNumber}`, {
+                        method: 'DELETE'
+                    });
+                    const resData = await response.json();
+
+                    if (response.ok) {
+                        Swal.fire('Deleted!', resData.message, 'success');
+                        fetchApprovedAccounts();
+                    } else {
+                        Swal.fire('Error', resData.message, 'error');
+                    }
+                } catch (error) {
+                    Swal.fire('Error', 'Could not connect to the server.', 'error');
+                }
+            }
+        }
+
         document.getElementById('adminTransactionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
@@ -179,13 +210,12 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
-
                 const result = await response.json();
 
                 if (response.ok) {
                     Swal.fire({ icon: 'success', title: 'Success!', text: result.message });
                     e.target.reset();
-                    fetchApprovedAccounts(); // Refresh the accounts table to show new balance
+                    fetchApprovedAccounts();
                 } else {
                     Swal.fire({ icon: 'error', title: 'Transaction Failed', text: result.message });
                 }
@@ -194,7 +224,6 @@
             }
         });
 
-        // Initial page load
         document.addEventListener('DOMContentLoaded', () => {
             fetchPendingAccounts();
             fetchApprovedAccounts();
