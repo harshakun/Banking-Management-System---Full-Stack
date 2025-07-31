@@ -2,7 +2,6 @@
 const express = require('express');
 const sql = require('mssql');
 const cors = require('cors');
-// const bcrypt = require('bcryptjs'); // BCRYPT REMOVED
 const jwt = require('jsonwebtoken');
 
 // 2. APP & MIDDLEWARE SETUP
@@ -28,12 +27,12 @@ const authenticateToken = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1];
 
     if (token == null) {
-        return res.sendStatus(401);
+        return res.sendStatus(401); // Unauthorized
     }
 
     jwt.verify(token, 'your_jwt_secret_key', (err, user) => {
         if (err) {
-            return res.sendStatus(403);
+            return res.sendStatus(403); // Forbidden (invalid token)
         }
         req.user = user;
         next();
@@ -53,38 +52,53 @@ sql.connect(dbConfig)
 // -- PUBLIC ROUTES (No Auth Needed)
 // ---------------------------------
 
-// Endpoint to Login
 app.post('/api/login', async (req, res) => {
     const { loginId, password } = req.body; 
     try {
         const pool = await sql.connect(dbConfig);
-        const result = await pool.request()
+        
+        let result = await pool.request()
             .input('LoginId', sql.VarChar, loginId)
             .query('SELECT * FROM Account_Holder_Details WHERE Account_Number = @LoginId OR Aadhar_Number = @LoginId');
 
-        const user = result.recordset[0];
-        if (!user) {
-            return res.status(404).json({ message: 'Account or Aadhar number not found.' });
+        let user = result.recordset[0];
+
+        if (user) {
+            // CRITICAL FIX: Reverted to plain text password comparison as requested.
+            if (password !== user.Password) {
+                return res.status(401).json({ message: 'Invalid password.' });
+            }
+            
+            const token = jwt.sign(
+                { accountNumber: user.Account_Number, name: user.Account_Holder_Name },
+                'your_jwt_secret_key',
+                { expiresIn: '1h' }
+            );
+            return res.status(200).json({ message: 'Login successful!', token: token });
         }
 
-        // INSECURE: Reverted to plain text password comparison.
-        if (password !== user.Password) {
-            return res.status(401).json({ message: 'Invalid password.' });
-        }
+        result = await pool.request()
+            .input('Aadhar_Number', sql.VarChar, loginId)
+            .query('SELECT KYC_Status, Decline_Reason FROM Account_Opening_Form WHERE Aadhar_Number = @Aadhar_Number');
         
-        const token = jwt.sign(
-            { accountNumber: user.Account_Number, name: user.Account_Holder_Name },
-            'your_jwt_secret_key',
-            { expiresIn: '1h' }
-        );
-        res.status(200).json({ message: 'Login successful!', token: token });
+        const application = result.recordset[0];
+
+        if (application) {
+            if (application.KYC_Status === 'PENDING') {
+                return res.status(403).json({ message: 'Your account application is still pending approval.' });
+            } else if (application.KYC_Status === 'DECLINED') {
+                return res.status(403).json({ message: `Your account application was declined. Reason: ${application.Decline_Reason}` });
+            }
+        }
+
+        return res.status(404).json({ message: 'Account or Aadhar number not found. Please register.' });
+
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Server error during login.' });
     }
 });
 
-// Endpoint to Open an Account Application
 app.post('/api/open-account', async (req, res) => {
     try {
         const { accountType, holderName, dob, aadhar, mobile, balance, address, password } = req.body;
@@ -92,8 +106,6 @@ app.post('/api/open-account', async (req, res) => {
         if (balance < 1000) {
             return res.status(400).json({ message: "Opening balance must be at least 1000." });
         }
-
-        // Hashing logic has been removed.
         
         const pool = await sql.connect(dbConfig);
         await pool.request()
@@ -104,7 +116,7 @@ app.post('/api/open-account', async (req, res) => {
             .input('Mobile_Number', sql.VarChar, mobile)
             .input('Account_Opening_Balance', sql.Decimal(10, 2), balance)
             .input('Address', sql.VarChar, address)
-            .input('Password', sql.NVarChar, password) // Passing the plain text password
+            .input('Password', sql.NVarChar, password)
             .execute('Open_Account');
             
         res.status(201).json({ message: 'Account application submitted successfully!' });
@@ -114,12 +126,28 @@ app.post('/api/open-account', async (req, res) => {
     }
 });
 
+app.get('/api/application-status/:aadhar', async(req,res) => {
+    try{
+        const {aadhar} = req.params; 
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('Aadhar_Number', sql.VarChar, aadhar)
+            .query('SELECT KYC_Status, Decline_Reason FROM Account_Opening_Form WHERE Aadhar_Number = @Aadhar_Number');
+        if(result.recordset.length === 0){
+            return res.status(404).json({message:'Application not found for this Aadhar number.'});
+        }
+        res.status(200).json(result.recordset[0]);
+    } catch(err) {
+        console.error(err); 
+        res.status(500).json({message:'Server error.'});
+    }
+});
+
 
 // -----------------------------------------
 // -- SECURE CUSTOMER ROUTES (Auth Required)
 // -----------------------------------------
 
-// Endpoint to Make a Transaction
 app.post('/api/make-transaction', authenticateToken, async (req, res) => {
     try {
         const { paymentType, amount } = req.body;
@@ -138,11 +166,9 @@ app.post('/api/make-transaction', authenticateToken, async (req, res) => {
     }
 });
 
-// Endpoint to Get a Customer's own Account Details
 app.get('/api/account-details', authenticateToken, async (req, res) => {
     try {
         const accountNumber = req.user.accountNumber;
-        
         const pool = await sql.connect(dbConfig);
         const result = await pool.request()
             .input('Account_Number', sql.BigInt, accountNumber)
@@ -154,7 +180,6 @@ app.get('/api/account-details', authenticateToken, async (req, res) => {
     }
 });
 
-// Endpoint to Get a Customer's own Payment Statement
 app.get('/api/payment-statement/:months', authenticateToken, async (req, res) => {
     try {
         const { months } = req.params;
@@ -171,34 +196,15 @@ app.get('/api/payment-statement/:months', authenticateToken, async (req, res) =>
         res.status(500).json({ message: 'Failed to fetch statement.' });
     }
 });
-// --- Add these two endpoints to server.js ---
 
-// SECURE CUSTOMER ROUTE: A user can delete their own account
 app.delete('/api/account', authenticateToken, async (req, res) => {
     try {
-        const accountNumber = req.user.accountNumber; // Get account number from the secure token
+        const accountNumber = req.user.accountNumber;
         const pool = await sql.connect(dbConfig);
         await pool.request()
             .input('AccountNumber', sql.BigInt, accountNumber)
             .execute('Delete_Account');
-        
         res.status(200).json({ message: 'Your account has been successfully deleted.' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Failed to delete account.' });
-    }
-});
-
-// ADMIN ROUTE: An admin can delete any account
-app.delete('/api/admin/account/:accountNumber', async (req, res) => {
-    try {
-        const { accountNumber } = req.params; // Get account number from the URL
-        const pool = await sql.connect(dbConfig);
-        await pool.request()
-            .input('AccountNumber', sql.BigInt, accountNumber)
-            .execute('Delete_Account');
-
-        res.status(200).json({ message: `Account ${accountNumber} has been successfully deleted.` });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Failed to delete account.' });
@@ -209,11 +215,93 @@ app.delete('/api/admin/account/:accountNumber', async (req, res) => {
 // ---------------------------------
 // -- ADMIN ROUTES (No Auth Yet)
 // ---------------------------------
-// ... (admin routes remain the same)
-app.get('/api/pending-accounts', async (req, res) => { try { const pool = await sql.connect(dbConfig); const result = await pool.request().query("SELECT ID, Account_Holder_Name, Aadhar_Number FROM Account_Opening_Form WHERE KYC_Status = 'PENDING'"); res.status(200).json(result.recordset); } catch (err) { console.error(err); res.status(500).json({ message: 'Failed to fetch pending accounts.' }); } });
-app.post('/api/approve-account/:id', async (req, res) => { try { const { id } = req.params; const pool = await sql.connect(dbConfig); const formResult = await pool.request().input('ID', sql.Int, id).query('SELECT Aadhar_Number FROM Account_Opening_Form WHERE ID = @ID'); const aadharNumber = formResult.recordset[0].Aadhar_Number; await pool.request().input('ID', sql.Int, id).query(`UPDATE Account_Opening_Form SET KYC_Status = 'Approved' WHERE ID = @ID`); const accountResult = await pool.request().input('Aadhar_Number', sql.VarChar, aadharNumber).query('SELECT Account_Number FROM Account_Holder_Details WHERE Aadhar_Number = @Aadhar_Number'); const newAccountNumber = accountResult.recordset[0].Account_Number; res.status(200).json({ message: `Account approved successfully! New Account Number is: ${newAccountNumber}`, accountNumber: newAccountNumber }); } catch (err) { console.error(err); res.status(500).json({ message: 'Failed to approve account.' }); } });
-app.get('/api/approved-accounts', async (req, res) => { try { const pool = await sql.connect(dbConfig); const result = await pool.request().query(`SELECT b.Account_Number, ah.Account_Holder_Name, b.Account_Type, b.Current_Balance, b.Account_Opening_Date FROM Bank b JOIN Account_Holder_Details ah ON b.Account_Number = ah.Account_Number ORDER BY b.Account_Opening_Date DESC`); res.status(200).json(result.recordset); } catch (err) { console.error(err); res.status(500).json({ message: 'Failed to fetch approved accounts.' }); } });
-app.post('/api/admin/make-transaction', async (req, res) => { try { const { accountNumber, paymentType, amount } = req.body; const pool = await sql.connect(dbConfig); await pool.request().input('Account_Number', sql.BigInt, accountNumber).input('Payment_Type', sql.VarChar, paymentType).input('Transaction_Amount', sql.Decimal(10, 2), amount).execute('Make_Transaction'); res.status(200).json({ message: 'Transaction posted successfully by admin!' }); } catch (err) { console.error(err); res.status(500).json({ message: err.originalError ? err.originalError.info.message : 'Error processing transaction.' }); } });
+
+app.get('/api/pending-accounts', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request().query("SELECT ID, Account_Holder_Name, Aadhar_Number FROM Account_Opening_Form WHERE KYC_Status = 'PENDING'");
+        res.status(200).json(result.recordset);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to fetch pending accounts.' });
+    }
+});
+
+app.post('/api/approve-account/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = await sql.connect(dbConfig);
+        const formResult = await pool.request().input('ID', sql.Int, id).query('SELECT Aadhar_Number FROM Account_Opening_Form WHERE ID = @ID');
+        const aadharNumber = formResult.recordset[0].Aadhar_Number;
+        await pool.request().input('ID', sql.Int, id).query(`UPDATE Account_Opening_Form SET KYC_Status = 'Approved' WHERE ID = @ID`);
+        const accountResult = await pool.request().input('Aadhar_Number', sql.VarChar, aadharNumber).query('SELECT Account_Number FROM Account_Holder_Details WHERE Aadhar_Number = @Aadhar_Number');
+        const newAccountNumber = accountResult.recordset[0].Account_Number;
+        res.status(200).json({ message: `Account approved successfully! New Account Number is: ${newAccountNumber}`, accountNumber: newAccountNumber });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to approve account.' });
+    }
+});
+
+app.post('/api/decline-account/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+        if (!reason) {
+            return res.status(400).json({ message: 'A reason for declining is required.' });
+        }
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('ID', sql.Int, id)
+            .input('Reason', sql.NVarChar, reason)
+            .query(`UPDATE Account_Opening_Form SET KYC_Status = 'DECLINED', Decline_Reason = @Reason WHERE ID = @ID`);
+        res.status(200).json({ message: 'Application has been declined.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to decline application.' });
+    }
+});
+
+app.get('/api/approved-accounts', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request().query(`SELECT b.Account_Number, ah.Account_Holder_Name, b.Account_Type, b.Current_Balance, b.Account_Opening_Date FROM Bank b JOIN Account_Holder_Details ah ON b.Account_Number = ah.Account_Number ORDER BY b.Account_Opening_Date DESC`);
+        res.status(200).json(result.recordset);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to fetch approved accounts.' });
+    }
+});
+
+app.post('/api/admin/make-transaction', async (req, res) => {
+    try {
+        const { accountNumber, paymentType, amount } = req.body;
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('Account_Number', sql.BigInt, accountNumber)
+            .input('Payment_Type', sql.VarChar, paymentType)
+            .input('Transaction_Amount', sql.Decimal(10, 2), amount)
+            .execute('Make_Transaction');
+        res.status(200).json({ message: 'Transaction posted successfully by admin!' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: err.originalError ? err.originalError.info.message : 'Error processing transaction.' });
+    }
+});
+
+app.delete('/api/admin/account/:accountNumber', async (req, res) => {
+    try {
+        const { accountNumber } = req.params;
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('AccountNumber', sql.BigInt, accountNumber)
+            .execute('Delete_Account');
+        res.status(200).json({ message: `Account ${accountNumber} has been successfully deleted.` });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to delete account.' });
+    }
+});
 
 
 // =================================================================
